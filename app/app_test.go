@@ -1,7 +1,9 @@
 package app
 
 import (
+	// "fmt"
 	// "flag"
+	"encoding/json"
 	"gopkg.in/urfave/cli.v1"
 	"io/ioutil"
 	"math/big"
@@ -142,7 +144,7 @@ func testApp() *cli.App {
 	return app
 }
 
-func makeTestSystemNode(tempDatadir string) *node.Node {
+func makeTestSystemNode(tempDatadir string, accman *accounts.Manager, acc accounts.Account) *node.Node {
 
 	params.TargetGasLimit = common.String2Big("1000000") // ctx.GlobalString(utils.TargetGasLimitFlag.Name)
 
@@ -162,9 +164,32 @@ func makeTestSystemNode(tempDatadir string) *node.Node {
 		WSModules:   []string{}, // utils.MakeRPCModules(ctx.GlobalString(utils.WSApiFlag.Name)),
 	}
 	// Configure the Ethereum service
-	accman := accounts.NewPlaintextManager(tempDatadir + "/keystore") // utils.MakeAccountManager(ctx)
-	jitEnabled := false                                               // ctx.GlobalBool(utils.VMEnableJitFlag.Name)
+	jitEnabled := false // ctx.GlobalBool(utils.VMEnableJitFlag.Name)
+
+	genesis, err := ioutil.ReadFile("/media/sf_sources/omise/golang/src/github.com/tendermint/ethermint/dev/genesis.json")
+	if err != nil {
+		utils.Fatalf("Failed reading test genesis.json %v", err)
+	}
+
+	var genesisdict map[string]interface{}
+	err = json.Unmarshal(genesis, &genesisdict)
+	if err != nil {
+		utils.Fatalf("Failed to unmarshal genesis json string %v", err)
+	}
+
+	genesisdict["alloc"].(map[string]interface{})[acc.Address.Hex()] = map[string]string{"balance": "10000000000000000000000000000000000"}
+
+	// fmt.Sprintf(
+	// 	"{\"%s\": {\"balance\": \"10000000000000000000000000000000000\"}",
+	// 	acc.Address.Str())
+
+	genesis, err = json.Marshal(genesisdict)
+	if err != nil {
+		utils.Fatalf("Failed to marshal genesis json string %v", err)
+	}
+
 	ethConf := &eth.Config{
+		Genesis:                 string(genesis),
 		ChainConfig:             &core.ChainConfig{big.NewInt(0), big.NewInt(0), true, big.NewInt(0), vm.Config{}},
 		BlockChainVersion:       1, // ctx.GlobalInt(utils.BlockchainVersionFlag.Name),
 		DatabaseCache:           0, // ctx.GlobalInt(utils.CacheFlag.Name),
@@ -214,7 +239,15 @@ func TestBumpingNonces(t *testing.T) {
 	// testss := ctx.GlobalString("datadir")
 	// t.Log("aparent datadir %v", testss)
 
-	stack := makeTestSystemNode(tempDatadir)
+	accman := accounts.NewPlaintextManager(tempDatadir + "/keystore") // utils.MakeAccountManager(ctx)
+
+	t.Log(accman.Accounts())
+	acc, err := accman.NewAccount("")
+	if err != nil {
+		t.Error("Failed to create testing account &v", err)
+	}
+
+	stack := makeTestSystemNode(tempDatadir, accman, acc)
 	utils.StartNode(stack)
 
 	// get backend differently ? not for now
@@ -239,15 +272,30 @@ func TestBumpingNonces(t *testing.T) {
 	t.Log(app.Info())
 	t.Log(app.CheckTx([]byte{}))
 
-	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), []byte{})
+	tx := types.NewTransaction(0, acc.Address, big.NewInt(10), big.NewInt(21000), big.NewInt(10), []byte{})
 
-	encodedtx, err := rlp.EncodeToBytes(tx)
-
+	err = accman.Unlock(acc, "")
 	if err != nil {
-		t.Error("Error encoding transaction %v", tx)
+		t.Error("Error unlocking account %v: %v", acc, err)
+	}
+
+	signature, err := accman.Sign(acc.Address, tx.SigHash().Bytes())
+	if err != nil {
+		t.Error("Error signing transaction %v with %v: %v", tx, signature, err)
+	}
+	t.Log("signature %v", signature)
+
+	signedtx, err := tx.WithSignature(signature)
+	if err != nil {
+		t.Error("Error applying transaction %v with %v: %v", tx, signature, err)
+	}
+	t.Log("signed %v", signedtx)
+
+	encodedtx, err := rlp.EncodeToBytes(signedtx)
+	if err != nil {
+		t.Error("Error encoding transaction %v: %v", signedtx, err)
 	}
 	t.Log("encoded %v", encodedtx)
 
-	// TODO fails because transaction is not signed
 	t.Log(app.CheckTx(encodedtx))
 }
