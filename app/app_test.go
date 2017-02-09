@@ -1,14 +1,15 @@
 package app
 
 import (
-	// "fmt"
-	// "flag"
 	"encoding/json"
-	"gopkg.in/urfave/cli.v1"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -20,129 +21,9 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tendermint/ethermint/ethereum"
 )
-
-// func testEthConf() *eth.Config {
-// 	&eth.Config{
-// 		ChainConfig:             utils.MustMakeChainConfig(ctx),
-// 		BlockChainVersion:       ctx.GlobalInt(utils.BlockchainVersionFlag.Name),
-// 		DatabaseCache:           ctx.GlobalInt(utils.CacheFlag.Name),
-// 		DatabaseHandles:         utils.MakeDatabaseHandles(),
-// 		NetworkId:               ctx.GlobalInt(utils.NetworkIdFlag.Name),
-// 		AccountManager:          accman,
-// 		Etherbase:               utils.MakeEtherbase(accman, ctx),
-// 		EnableJit:               jitEnabled,
-// 		ForceJit:                ctx.GlobalBool(utils.VMForceJitFlag.Name),
-// 		GasPrice:                common.String2Big(ctx.GlobalString(utils.GasPriceFlag.Name)),
-// 		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(utils.GpoMinGasPriceFlag.Name)),
-// 		GpoMaxGasPrice:          common.String2Big(ctx.GlobalString(utils.GpoMaxGasPriceFlag.Name)),
-// 		GpoFullBlockRatio:       ctx.GlobalInt(utils.GpoFullBlockRatioFlag.Name),
-// 		GpobaseStepDown:         ctx.GlobalInt(utils.GpobaseStepDownFlag.Name),
-// 		GpobaseStepUp:           ctx.GlobalInt(utils.GpobaseStepUpFlag.Name),
-// 		GpobaseCorrectionFactor: ctx.GlobalInt(utils.GpobaseCorrectionFactorFlag.Name),
-// 		SolcPath:                ctx.GlobalString(utils.SolcPathFlag.Name),
-// 	}
-// }
-
-func testApp() *cli.App {
-
-	DataDirFlag := utils.DirectoryFlag{
-		Name:  "datadir",
-		Usage: "Data directory for the databases and keystore",
-		Value: utils.DirectoryString{""},
-	}
-	app := cli.NewApp()
-	app.Flags = []cli.Flag{
-		utils.IdentityFlag,
-		utils.UnlockedAccountFlag,
-		utils.PasswordFileFlag,
-		utils.BootnodesFlag,
-		DataDirFlag,
-		utils.KeyStoreDirFlag,
-		utils.BlockchainVersionFlag,
-		utils.CacheFlag,
-		utils.LightKDFFlag,
-		utils.JSpathFlag,
-		utils.ListenPortFlag,
-		utils.MaxPeersFlag,
-		utils.MaxPendingPeersFlag,
-		utils.EtherbaseFlag,
-		utils.TargetGasLimitFlag,
-		utils.GasPriceFlag,
-		utils.NATFlag,
-		utils.NatspecEnabledFlag,
-		utils.NodeKeyFileFlag,
-		utils.NodeKeyHexFlag,
-		utils.RPCEnabledFlag,
-		utils.RPCListenAddrFlag,
-		utils.RPCPortFlag,
-		utils.RPCApiFlag,
-		utils.WSEnabledFlag,
-		utils.WSListenAddrFlag,
-		utils.WSPortFlag,
-		utils.WSApiFlag,
-		utils.WSAllowedOriginsFlag,
-		utils.IPCDisabledFlag,
-		utils.IPCApiFlag,
-		utils.IPCPathFlag,
-		utils.ExecFlag,
-		utils.PreloadJSFlag,
-		utils.TestNetFlag,
-		utils.VMForceJitFlag,
-		utils.VMJitCacheFlag,
-		utils.VMEnableJitFlag,
-		utils.NetworkIdFlag,
-		utils.RPCCORSDomainFlag,
-		utils.MetricsEnabledFlag,
-		utils.SolcPathFlag,
-		utils.GpoMinGasPriceFlag,
-		utils.GpoMaxGasPriceFlag,
-		utils.GpoFullBlockRatioFlag,
-		utils.GpobaseStepDownFlag,
-		utils.GpobaseStepUpFlag,
-		utils.GpobaseCorrectionFactorFlag,
-		cli.StringFlag{
-			Name:  "node_laddr",
-			Value: "tcp://0.0.0.0:46656",
-			Usage: "Node listen address. (0.0.0.0:0 means any interface, any port)",
-		},
-		cli.StringFlag{
-			Name:  "log_level",
-			Value: "info",
-			Usage: "Tendermint Log level",
-		},
-		cli.StringFlag{
-			Name:  "seeds",
-			Value: "",
-			Usage: "Comma delimited host:port seed nodes",
-		},
-		cli.BoolFlag{
-			Name:  "no_fast_sync",
-			Usage: "Disable fast blockchain syncing",
-		},
-		cli.BoolFlag{
-			Name:  "skip_upnp",
-			Usage: "Skip UPNP configuration",
-		},
-		cli.StringFlag{
-			Name:  "rpc_laddr",
-			Value: "tcp://0.0.0.0:46657",
-			Usage: "RPC listen address. Port required",
-		},
-		cli.StringFlag{
-			Name:  "addr",
-			Value: "tcp://0.0.0.0:46658",
-			Usage: "TMSP app listen address",
-		},
-		cli.StringFlag{
-			Name:  "tmsp",
-			Value: "socket",
-			Usage: "socket | grpc",
-		},
-	}
-	return app
-}
 
 func makeTestSystemNode(tempDatadir string, accman *accounts.Manager, acc accounts.Account) *node.Node {
 
@@ -164,7 +45,7 @@ func makeTestSystemNode(tempDatadir string, accman *accounts.Manager, acc accoun
 		WSModules:   []string{}, // utils.MakeRPCModules(ctx.GlobalString(utils.WSApiFlag.Name)),
 	}
 	// Configure the Ethereum service
-	jitEnabled := false // ctx.GlobalBool(utils.VMEnableJitFlag.Name)
+	jitEnabled := false
 
 	genesis, err := ioutil.ReadFile("/media/sf_sources/omise/golang/src/github.com/tendermint/ethermint/dev/genesis.json")
 	if err != nil {
@@ -178,10 +59,6 @@ func makeTestSystemNode(tempDatadir string, accman *accounts.Manager, acc accoun
 	}
 
 	genesisdict["alloc"].(map[string]interface{})[acc.Address.Hex()] = map[string]string{"balance": "10000000000000000000000000000000000"}
-
-	// fmt.Sprintf(
-	// 	"{\"%s\": {\"balance\": \"10000000000000000000000000000000000\"}",
-	// 	acc.Address.Str())
 
 	genesis, err = json.Marshal(genesisdict)
 	if err != nil {
@@ -222,6 +99,22 @@ func makeTestSystemNode(tempDatadir string, accman *accounts.Manager, acc accoun
 	return stack
 }
 
+func prepareTx(nonce uint64, acc accounts.Account, accman *accounts.Manager) ([]byte, error) {
+	tx := types.NewTransaction(nonce, acc.Address, big.NewInt(10), big.NewInt(21000), big.NewInt(10), []byte{})
+
+	signature, err := accman.Sign(acc.Address, tx.SigHash().Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	signedtx, err := tx.WithSignature(signature)
+	if err != nil {
+		return nil, err
+	}
+
+	return rlp.EncodeToBytes(signedtx)
+}
+
 func getTxPoolAPI(app *EthermintApplication) *eth.PublicTransactionPoolAPI {
 	apis := app.Backend().Ethereum().APIs()
 	for _, v := range apis {
@@ -236,92 +129,87 @@ func getTxPoolAPI(app *EthermintApplication) *eth.PublicTransactionPoolAPI {
 }
 
 func TestBumpingNonces(t *testing.T) {
-	// app := testApp()
-	// ctx := cli.NewContext(app, flag.NewFlagSet("test", 0), nil)
-	//
+	fmt.Print("")
+
 	tempDatadir, err := ioutil.TempDir("", "ethermint_test")
 	if err != nil {
 		t.Error("unable to create temporary datadir")
 	}
-	defer os.RemoveAll(tempDatadir)
-	t.Log("created &v", tempDatadir)
-	//
-	// if err := ctx.Set("datadir", tempDatadir); err != nil {
-	// 	t.Fatal("Unable set temporary datadir")
-	// }
-	// testss := ctx.GlobalString("datadir")
-	// t.Log("aparent datadir %v", testss)
+	defer func() {
+		os.RemoveAll(tempDatadir)
+		t.Log("removed", tempDatadir)
+	}()
 
-	accman := accounts.NewPlaintextManager(tempDatadir + "/keystore") // utils.MakeAccountManager(ctx)
+	accman := accounts.NewPlaintextManager(tempDatadir + "/keystore")
 
-	t.Log(accman.Accounts())
-	acc, err := accman.NewAccount("")
+	// acc, err := accman.NewAccount("")
+	// deterministic version of the above
+	acc, err := accman.Import([]byte{123, 34, 97, 100, 100, 114, 101, 115, 115, 34, 58, 34, 52, 99, 49, 48, 57, 98, 97, 54, 52, 99, 48, 99, 98, 48, 50, 98, 51, 99, 55, 53, 102, 50, 101, 99, 51, 100, 52, 54, 48, 55, 57, 49, 50, 102, 51, 101, 50, 56, 100, 54, 34, 44, 34, 99, 114, 121, 112, 116, 111, 34, 58, 123, 34, 99, 105, 112, 104, 101, 114, 34, 58, 34, 97, 101, 115, 45, 49, 50, 56, 45, 99, 116, 114, 34, 44, 34, 99, 105, 112, 104, 101, 114, 116, 101, 120, 116, 34, 58, 34, 49, 52, 48, 53, 56, 56, 97, 102, 53, 54, 53, 52, 102, 97, 54, 55, 97, 48, 101, 102, 97, 55, 51, 51, 50, 52, 102, 99, 55, 52, 55, 56, 53, 102, 48, 99, 100, 55, 101, 102, 55, 51, 48, 50, 98, 48, 50, 97, 100, 54, 56, 54, 49, 56, 53, 54, 54, 98, 52, 53, 101, 48, 98, 99, 34, 44, 34, 99, 105, 112, 104, 101, 114, 112, 97, 114, 97, 109, 115, 34, 58, 123, 34, 105, 118, 34, 58, 34, 49, 56, 48, 57, 49, 53, 57, 54, 102, 51, 102, 48, 53, 98, 54, 57, 99, 53, 97, 100, 53, 100, 54, 102, 102, 48, 100, 98, 51, 57, 56, 55, 34, 125, 44, 34, 107, 100, 102, 34, 58, 34, 115, 99, 114, 121, 112, 116, 34, 44, 34, 107, 100, 102, 112, 97, 114, 97, 109, 115, 34, 58, 123, 34, 100, 107, 108, 101, 110, 34, 58, 51, 50, 44, 34, 110, 34, 58, 50, 54, 50, 49, 52, 52, 44, 34, 112, 34, 58, 49, 44, 34, 114, 34, 58, 56, 44, 34, 115, 97, 108, 116, 34, 58, 34, 48, 57, 51, 50, 56, 101, 50, 52, 57, 54, 98, 98, 56, 54, 55, 98, 102, 55, 102, 98, 54, 56, 48, 97, 102, 54, 102, 100, 97, 98, 97, 98, 100, 97, 52, 55, 102, 55, 102, 101, 97, 55, 54, 48, 54, 97, 53, 53, 50, 100, 57, 55, 53, 100, 99, 50, 100, 98, 53, 49, 98, 53, 100, 98, 34, 125, 44, 34, 109, 97, 99, 34, 58, 34, 97, 101, 56, 50, 57, 98, 97, 57, 54, 97, 98, 48, 53, 51, 52, 98, 55, 50, 98, 55, 100, 100, 54, 57, 56, 98, 98, 55, 98, 97, 55, 54, 102, 55, 100, 54, 99, 98, 97, 97, 98, 51, 49, 100, 100, 98, 98, 51, 51, 52, 51, 51, 57, 100, 99, 98, 53, 52, 53, 51, 50, 56, 57, 57, 34, 125, 44, 34, 105, 100, 34, 58, 34, 101, 53, 50, 56, 100, 100, 51, 56, 45, 54, 49, 98, 53, 45, 52, 57, 56, 53, 45, 57, 48, 100, 102, 45, 56, 48, 100, 57, 57, 98, 50, 51, 102, 53, 100, 51, 34, 44, 34, 118, 101, 114, 115, 105, 111, 110, 34, 58, 51, 125},
+		"", "")
 	if err != nil {
 		t.Error("Failed to create testing account &v", err)
 	}
-
-	stack := makeTestSystemNode(tempDatadir, accman, acc)
-	utils.StartNode(stack)
-
-	// get backend differently ? not for now
-	var backend *ethereum.Backend
-	if err := stack.Service(&backend); err != nil {
-		t.Error("backend service not running: %v", err)
-	}
-	// ethConf := testEthConf()
-	//
-	// backend, err := ethereum.NewBackend(ctx, config)
-
-	// hopefully client isn't ever needed (used by Query calls)
-	// client, err := stack.Attach()
-	// if err != nil {
-	// 	t.Error("Failed to attach to the inproc geth: %v", err)
-	// }
-	app, err := NewEthermintApplication(backend, nil, nil)
-	if err != nil {
-		t.Error("Failed to create ethermint app")
-	}
-
-	t.Log(app.Info())
-	t.Log(app.CheckTx([]byte{}))
-
-	tx := types.NewTransaction(0, acc.Address, big.NewInt(10), big.NewInt(21000), big.NewInt(10), []byte{})
 
 	err = accman.Unlock(acc, "")
 	if err != nil {
 		t.Error("Error unlocking account %v: %v", acc, err)
 	}
+	exbytes, err := accman.Export(acc, "", "")
+	t.Log(exbytes)
 
-	signature, err := accman.Sign(acc.Address, tx.SigHash().Bytes())
-	if err != nil {
-		t.Error("Error signing transaction %v with %v: %v", tx, signature, err)
-	}
-	t.Log("signature %v", signature)
+	stack := makeTestSystemNode(tempDatadir, accman, acc)
+	utils.StartNode(stack)
 
-	signedtx, err := tx.WithSignature(signature)
-	if err != nil {
-		t.Error("Error applying transaction %v with %v: %v", tx, signature, err)
+	var backend *ethereum.Backend
+	if err := stack.Service(&backend); err != nil {
+		t.Error("backend service not running: %v", err)
 	}
-	t.Log("signed %v", signedtx)
 
-	encodedtx, err := rlp.EncodeToBytes(signedtx)
+	app, err := NewEthermintApplication(backend, nil, nil)
 	if err != nil {
-		t.Error("Error encoding transaction %v: %v", signedtx, err)
+		t.Error("Failed to create ethermint app")
 	}
-	t.Log("encoded %v", encodedtx)
+
+	tx1, err := prepareTx(0, acc, accman)
+	if err != nil {
+		t.Error("Error preparing transaction %v for %v: %v", 0, acc, err)
+	}
 
 	txPoolAPI := getTxPoolAPI(app)
 	if txPoolAPI == nil {
 		t.Error("Unable to fetch tx pool api")
 	}
 
-	app.txPool.Pending()
-	apinonce, err := txPoolAPI.GetTransactionCount(acc.Address, -1)
-	t.Log(app.txPool.State().GetNonce(acc.Address), apinonce)
-	t.Log(app.AppendTx(encodedtx))
+	t.Log(app.CheckTx(tx1))
+	t.Log(app.AppendTx(tx1))
 	t.Log(app.Commit())
-	app.txPool.Pending()
-	apinonce, err = txPoolAPI.GetTransactionCount(acc.Address, -1)
-	t.Log(app.txPool.State().GetNonce(acc.Address), apinonce)
+	time.Sleep(0 * time.Second)
 
+	// tx2, err := prepareTx(1, acc, accman)
+
+	// result, err := txPoolAPI.SendRawTransaction(common.ToHex(tx2))
+	sendargs := eth.SendTxArgs{
+		From:     acc.Address,
+		To:       &acc.Address,
+		Gas:      rpc.NewHexNumber(21000),
+		GasPrice: rpc.NewHexNumber(10),
+		Value:    rpc.NewHexNumber(10),
+		Data:     "",
+		Nonce:    nil,
+	}
+	result, err := txPoolAPI.SendTransaction(sendargs)
+	if err != nil {
+		t.Errorf("error sending raw tx:  %v", err)
+	}
+	t.Log(result)
+
+	t.Log(app.Commit())
+
+	apinonce, err := txPoolAPI.GetTransactionCount(acc.Address, -1)
+	if app.txPool.State() == nil {
+		app.txPool.Pending()
+	}
+	t.Log(app.txPool.State().GetNonce(acc.Address))
+	assert.Equal(t, app.txPool.State().GetNonce(acc.Address), apinonce.Uint64(), "nonce out of sync")
+	assert.Equal(t, uint64(2), apinonce.Uint64(), "nonce in API not bumped")
 }

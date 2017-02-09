@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -224,23 +225,25 @@ func (app *EthermintApplication) Commit() tmspTypes.Result {
 		return tmspTypes.ErrInternalError
 	}
 
+	fmt.Print("")
 	// if there were nonces bumped by incomming txs, we need to bump them in the PublicTransactionPoolAPI too
-	newstate := app.txPool.State()
-	if newstate != nil {
-		nonces := make(map[common.Address]uint64)
-		for _, tx := range app.blockResults.transactions {
-			from, err := tx.From()
-			if err != nil {
-				glog.V(logger.Debug).Infof("Error reading new transactions for nonces: %v", err)
-				return tmspTypes.ErrInternalError
-			}
-			nonces[from] = newstate.GetNonce(from)
-		}
-		if err := app.backend.SetNoncesInAPI(nonces); err != nil {
-			glog.V(logger.Debug).Infof("Error while setting nonces in API: %v", err)
-			return tmspTypes.ErrInternalError
-		}
-	}
+	// newstate := app.txPool.State()
+	// if newstate != nil {
+	// 	nonces := make(map[common.Address]uint64)
+	// 	for _, tx := range app.blockResults.transactions {
+	// 		from, err := tx.From()
+	// 		if err != nil {
+	// 			glog.V(logger.Debug).Infof("Error reading new transactions for nonces: %v", err)
+	// 			return tmspTypes.ErrInternalError
+	// 		}
+	// 		nonces[from] = newstate.GetNonce(from)
+	// 	}
+	// 	fmt.Print(newstate, nonces)
+	// 	if err := app.backend.SetNoncesInAPI(nonces); err != nil {
+	// 		glog.V(logger.Debug).Infof("Error while setting nonces in API: %v", err)
+	// 		return tmspTypes.ErrInternalError
+	// 	}
+	// }
 
 	// reset the block results for the next block
 	// with a new eth header and the latest eth state
