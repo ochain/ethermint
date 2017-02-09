@@ -222,6 +222,19 @@ func makeTestSystemNode(tempDatadir string, accman *accounts.Manager, acc accoun
 	return stack
 }
 
+func getTxPoolAPI(app *EthermintApplication) *eth.PublicTransactionPoolAPI {
+	apis := app.Backend().Ethereum().APIs()
+	for _, v := range apis {
+		if v.Namespace == "net" {
+			continue
+		}
+		if txPoolAPI, ok := v.Service.(*eth.PublicTransactionPoolAPI); ok {
+			return txPoolAPI
+		}
+	}
+	return nil
+}
+
 func TestBumpingNonces(t *testing.T) {
 	// app := testApp()
 	// ctx := cli.NewContext(app, flag.NewFlagSet("test", 0), nil)
@@ -297,5 +310,18 @@ func TestBumpingNonces(t *testing.T) {
 	}
 	t.Log("encoded %v", encodedtx)
 
-	t.Log(app.CheckTx(encodedtx))
+	txPoolAPI := getTxPoolAPI(app)
+	if txPoolAPI == nil {
+		t.Error("Unable to fetch tx pool api")
+	}
+
+	app.txPool.Pending()
+	apinonce, err := txPoolAPI.GetTransactionCount(acc.Address, -1)
+	t.Log(app.txPool.State().GetNonce(acc.Address), apinonce)
+	t.Log(app.AppendTx(encodedtx))
+	t.Log(app.Commit())
+	app.txPool.Pending()
+	apinonce, err = txPoolAPI.GetTransactionCount(acc.Address, -1)
+	t.Log(app.txPool.State().GetNonce(acc.Address), apinonce)
+
 }
