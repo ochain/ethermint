@@ -119,6 +119,7 @@ func getTendermintConfig(ctx *cli.Context) cfg.Config {
 	config.Set("node_laddr", ctx.GlobalString("node_laddr"))
 	config.Set("seeds", ctx.GlobalString("seeds"))
 	config.Set("fast_sync", ctx.GlobalBool("no_fast_sync"))
+	config.Set("pex_reactor", ctx.GlobalBool("pex"))
 	config.Set("skip_upnp", ctx.GlobalBool("skip_upnp"))
 	config.Set("rpc_laddr", ctx.GlobalString("rpc_laddr"))
 	config.Set("proxy_app", ctx.GlobalString("addr"))
@@ -313,6 +314,10 @@ func newCliApp(version, usage string) *cli.App {
 			Name:  "abci",
 			Value: "socket",
 			Usage: "socket | grpc",
+		},
+		cli.BoolFlag{
+			Name:  "pex",
+			Usage: "Run tendermint's peer-exchange protocol",
 		},
 	}
 	return app
