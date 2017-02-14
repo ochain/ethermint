@@ -11,6 +11,12 @@ USER ethermint
 
 RUN mkdir -p /ethermint/setup
 COPY genesis.json /ethermint/setup/
+
+# sometimes the ownership/permissions is ok sometimes it's not, see ochain/oc#
+USER root
+RUN chown ethermint /ethermint/setup/genesis.json
+USER ethermint
+
 RUN ethermint -datadir /ethermint/data init /ethermint/setup/genesis.json
 COPY keystore /ethermint/data/keystore
 EXPOSE 8545
