@@ -1,0 +1,4 @@
+# speeding up docker context building: see ochain/oc#
+vendor/github.com/ethereum/go-ethereum/tests
+.git
+docker/Dockerfile
