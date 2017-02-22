@@ -49,6 +49,6 @@ services:
     container_name: contract
     image: docker.contract
     environment:
-      - "NODE_CONFIG={\"provider\": \"http://gateway:8545\"}"
+      - "NODE_CONFIG={\"provider\": \"http://gateway:8545\", \"n\": 4000}"
     command: node main.js
 
